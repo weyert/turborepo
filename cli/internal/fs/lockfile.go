@@ -1,74 +1,28 @@
-//go:build !windows
-// +build !windows
-
 package fs
 
 import (
 	"fmt"
 	"io/ioutil"
 	"path/filepath"
-	"regexp"
-	"strings"
 
 	"gopkg.in/yaml.v3"
 )
 
 // ReadLockfile will read `yarn.lock` into memory (either from the cache or fresh)
 func ReadLockfile(cacheDir string) (*YarnLockfile, error) {
-	var lockfile YarnLockfile
 	var prettyLockFile = YarnLockfile{}
+
 	hash, err := HashFile("yarn.lock")
 	if err != nil {
 		return &YarnLockfile{}, fmt.Errorf("failed to hash lockfile: %w", err)
 	}
+
 	contentsOfLock, err := ioutil.ReadFile(filepath.Join(cacheDir, fmt.Sprintf("%v-turbo-lock.yaml", hash)))
 	if err != nil {
-		contentsB, err := ioutil.ReadFile("yarn.lock")
+
+		prettyLockFile, err := parseLockfile("yarn.lock")
 		if err != nil {
-			return nil, fmt.Errorf("reading yarn.lock: %w", err)
-		}
-		lines := strings.Split(string(contentsB), "\n")
-		r := regexp.MustCompile(`^[\w"]`)
-		double := regexp.MustCompile(`\:\"\:`)
-		l := regexp.MustCompile("\"|:\n$")
-		o := regexp.MustCompile(`\"\s\"`)
-		// deals with colons
-		// integrity sha-... -> integrity: sha-...
-		// "@apollo/client" latest -> "@apollo/client": latest
-		// "@apollo/client" "0.0.0" -> "@apollo/client": "0.0.0"
-		// apollo-client "0.0.0" -> apollo-client: "0.0.0"
-		a := regexp.MustCompile(`(\w|\")\s(\"|\w)`)
-
-		for i, line := range lines {
-			if r.MatchString(line) {
-				first := fmt.Sprintf("\"%v\":", l.ReplaceAllString(line, ""))
-				lines[i] = double.ReplaceAllString(first, "\":")
-			}
-		}
-		output := o.ReplaceAllString(strings.Join(lines, "\n"), "\": \"")
-
-		next := a.ReplaceAllStringFunc(output, func(m string) string {
-			parts := a.FindStringSubmatch(m)
-			return fmt.Sprintf("%s: %s", parts[1], parts[2])
-		})
-
-		err = yaml.Unmarshal([]byte(next), &lockfile)
-		if err != nil {
-			return &YarnLockfile{}, fmt.Errorf("could not unmarshal lockfile: %w", err)
-		}
-		// This final step is important, it splits any deps with multiple-resolutions
-		// (e.g. "@babel/generator@^7.13.0, @babel/generator@^7.13.9":) into separate
-		// entries in our map
-		// TODO: make concurrent
-		for key, val := range lockfile {
-			if strings.Contains(key, ",") {
-				for _, v := range strings.Split(key, ", ") {
-					prettyLockFile[strings.TrimSpace(v)] = val
-				}
-
-			} else {
-				prettyLockFile[key] = val
-			}
+			return &YarnLockfile{}, fmt.Errorf("failed to read lockfile: %w", err)
 		}
 
 		better, err := yaml.Marshal(&prettyLockFile)
