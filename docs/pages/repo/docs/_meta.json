@@ -15,6 +15,13 @@
     "newWindow": true
   },
   "upgrading-to-v1": "Upgrading to v1",
+  "telemetry": "Telemetry",
+  "support": "Support Policy",
   "acknowledgements": "Acknowledgements",
-  "faq": "FAQ"
+  "faq": "FAQ",
+  "glossary": {
+    "title": "Glossary",
+    "href": "https://vercel.com/docs/vercel-platform/glossary",
+    "newWindow": true
+  }
 }
